@@ -1,123 +1,318 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
 
-void main() {
+
+// import 'package:device_info_plus/device_info_plus.dart';
+// import 'package:flutter/foundation.dart';
+// import 'package:timezone/data/latest_all.dart' as tz;
+// import 'package:timezone/timezone.dart' as tz;
+// import 'package:flutter_timezone/flutter_timezone.dart';
+// import 'notifications.dart';
+
+import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:workmanager/workmanager.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+
+  String estadoMercado = 'Fechado!';
+  String horaAlarme = '00:00';
+  String estadoAlarme = 'Desativado';
+  String estadoNotificacao = 'Desativado';
+  String mudarEstadoAlarme = 'Ativar Alarme!';
+  String mudarEstadoNotificacao = 'Ativar Notificação!';
+  String dataFechamento = 'Terça-Feira - 22/07';
+  String horaFechamento = '00:00';
+
+int id = 0;
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+
+final StreamController<String?> selectNotificationStream =
+    StreamController<String?>.broadcast();
+
+const MethodChannel platform =
+    MethodChannel('dexterx.dev/flutter_local_notifications_example');
+
+const String portName = 'notification_send_port';
+
+
+void _jogoMaisProximo() async {
+    try {
+      // Ler o conteúdo do arquivo JSON
+      final file = File('jogos.json');
+      String jsonString = await file.readAsString();
+
+      // Decodificar o JSON
+      final jogos = json.decode(jsonString);
+
+      // Verificar se há jogos
+      if (jogos.isNotEmpty) {
+        // Obter a data do primeiro jogo
+        final data = jogos[0]['data'];
+        dataFechamento = data.substring(0, 10);
+        horaFechamento = data.substring(11, 16);
+        
+      } else {
+        mudarEstadoAlarme = 'HAHA';
+      }
+    } catch (e) {
+      mudarEstadoAlarme = 'Erro ao obter informações!';
+    }
+  }
+Future<void> _executarScript() async {
+  try {
+    final processResult = await Process.run('node', ['teste.js']);
+    
+    // Exibir notificação após a execução do script
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+            'your channel id', 'your channel name', 'your channel description',
+            importance: Importance.max, priority: Priority.high);
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+    await flutterLocalNotificationsPlugin.show(
+        0, 'Título da Notificação', 'Corpo da Notificação', platformChannelSpecifics,
+        payload: 'item x');
+    
+  } catch (e) {
+    print('Erro ao executar o script: $e');
+  }
+}
+
+
+
+void callbackDispatcher() {
+  Workmanager workmanager = Workmanager();
+  workmanager.executeTask((task, inputData) async {
+    switch (task) {
+      case "periodicTask":
+        _executarScript();
+        _jogoMaisProximo();
+        break;
+      default:
+        print("Tarefa desconhecida: $task");
+    }
+    return Future.value(true);
+  });
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('app_icon');
+  final InitializationSettings initializationSettings =
+      InitializationSettings(android: initializationSettingsAndroid);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   runApp(const MyApp());
 }
+
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        // TRY THIS: Try running your application with "flutter run". 
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Desenvolvido por: Kiri'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
   final String title;
 
+  const MyHomePage({super.key, required this.title});
+
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
 
-  void _incrementCounter() {
+  
+  @override
+  void initState() {
+    super.initState();
+    _startPeriodicTask();
+  }
+
+  // Método para iniciar a tarefa periódica
+  void _startPeriodicTask() {
+    Workmanager().registerPeriodicTask(
+      "periodicTask",
+      "periodicTask",
+      initialDelay: const Duration(minutes: 10),
+    );
+  }
+
+  void _botaoAlarme() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      if (estadoAlarme == 'Desativado') {
+        estadoAlarme = 'Ativado';
+        mudarEstadoAlarme = 'Desativar Alarme!';
+      } else {
+        estadoAlarme = 'Desativado';
+        mudarEstadoAlarme = 'Ativar Alarme!';
+      }
     });
+  }
+
+  
+
+  void _botaoNotificacao() {
+    setState(() {
+      if (estadoNotificacao == 'Desativado') {
+        estadoNotificacao = 'Ativado';
+        mudarEstadoNotificacao = 'Desativar Notificação!';
+      } else {
+        estadoNotificacao = 'Desativado';
+        mudarEstadoNotificacao = 'Ativar Notificação!';
+      }
+    });
+  }
+
+  Future<void> _botaoHorario() async {
+    final TimeOfDay? horarioSelecionado = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (horarioSelecionado != null) {
+      setState(() {
+        horaAlarme = horarioSelecionado.format(context);
+      });
+    }
+  }
+
+  void _abreManual() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Como Funciona:'),
+          content: const Text('O app te enviará notificações e alarmes para te lembrar de escalar o time no Cartola. Ao deixar a notificação/alarme ativada o app irá automaticamente te lembrar uma hora antes de fechar o mercado, você pode ajustar esse horário manualmente, mas a cada rodada o horário é resetado para uma hora antes do fechamento do mercado.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Ok, Entendi!'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Chamar Kiri no Zap'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
+        backgroundColor: Colors.amber,
         title: Text(widget.title),
       ),
+
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            SizedBox(
+              width: 400,
+              height: 140,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Alarme: $estadoAlarme',
+                    style: const TextStyle(fontSize: 20),
+                    textWidthBasis: TextWidthBasis.parent,
+                  ),
+                  Text(
+                    'Notificação: $estadoNotificacao',
+                    style: const TextStyle(fontSize: 20),
+                    textWidthBasis: TextWidthBasis.parent,
+                  ),
+                  Text(
+                    'Horário de Alarme/Notificação: $horaAlarme',
+                    style: const TextStyle(fontSize: 18),
+                    textWidthBasis: TextWidthBasis.parent,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 400,
+              height: 80,
+              child: Column(
+                children: [
+                  Text(
+                    'Dia de Fechamento: $dataFechamento',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Text(
+                    'Horário de Fechamento: $horaFechamento',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ),
             const Text(
-              'You have pushed the button this many times:',
+              'Estado do Mercado: ',
             ),
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              estadoMercado,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _botaoAlarme,
+              child: Text(mudarEstadoAlarme),
+            ),
+            ElevatedButton(
+              onPressed: _botaoNotificacao,
+              child: Text(mudarEstadoNotificacao),
+            ),
+            ElevatedButton(
+              onPressed: _botaoHorario,
+              child: const Text('Alterar Hora do Alarme/Notificação'),
+            ),
+            ElevatedButton(
+              onPressed: _abreManual,
+              child: const Row (
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Manual'),
+                  SizedBox(width: 10),
+                  Icon(Icons.help),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
