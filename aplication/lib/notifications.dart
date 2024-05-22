@@ -1,20 +1,16 @@
 import 'dart:async';
-
-// import 'package:device_info_plus/device_info_plus.dart';
-// import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-// import 'package:flutter_timezone/flutter_timezone.dart';
-// import 'package:workmanager/workmanager.dart';
-
-// import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:rxdart/rxdart.dart';
 
-// Define the necessary variables
+// Define os objetos necessários
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
-final selectNotificationStream = StreamController<String?>.broadcast();
+final selectNotificationSubject = BehaviorSubject<String?>();
+
+// Constante para identificar a notificação
 const int id = 0;
 
 // Função para inicializar o plugin de notificações locais
@@ -23,16 +19,28 @@ Future<void> initializeNotifications() async {
   const AndroidInitializationSettings initializationSettingsAndroid =
       AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  final InitializationSettings initializationSettings =
+  const InitializationSettings initializationSettings =
       InitializationSettings(android: initializationSettingsAndroid);
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-      onSelectNotification: (String? payload) async {
+     
+  // Callback para notificações em primeiro plano
+  onDidReceiveNotificationResponse: (NotificationResponse response) async {
+    final payload = response.payload;
     if (payload != null) {
       debugPrint('Notification payload: $payload');
     }
-    // Emitir o payload da notificação para a stream de seleção de notificação
-    selectNotificationStream.add(payload);
+    // Emitir o payload da notificação para o fluxo de seleção de notificação
+    selectNotificationSubject.add(payload);
+  },
+  // Callback para notificações em segundo plano
+  onDidReceiveBackgroundNotificationResponse: (NotificationResponse response) async {
+    final payload = response.payload;
+    if (payload != null) {
+      debugPrint('Background Notification payload: $payload');
+    }
+    // Emitir o payload da notificação para o fluxo de seleção de notificação
+    selectNotificationSubject.add(payload);
   });
 }
 
@@ -42,7 +50,6 @@ Future<void> showNotification(String title, String body) async {
       AndroidNotificationDetails(
     'your channel id',
     'your channel name',
-    'your channel description',
     importance: Importance.max,
     priority: Priority.high,
   );
@@ -66,7 +73,6 @@ Future<void> scheduleNotification(
       AndroidNotificationDetails(
     'your channel id',
     'your channel name',
-    'your channel description',
     importance: Importance.max,
     priority: Priority.high,
   );
@@ -80,7 +86,6 @@ Future<void> scheduleNotification(
     body,
     tz.TZDateTime.from(scheduledDate, tz.local),
     platformChannelSpecifics,
-    androidAllowWhileIdle: true,
     uiLocalNotificationDateInterpretation:
         UILocalNotificationDateInterpretation.absoluteTime,
     matchDateTimeComponents: DateTimeComponents.time,

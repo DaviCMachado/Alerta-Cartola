@@ -1,19 +1,24 @@
-const fs = require('fs');
-const cheerio = require('cheerio');
-const axios = require('axios');
+import fs from 'fs';
+import path from 'path';
+import cheerio from 'cheerio';
+import axios from 'axios';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 axios.get('https://footystats.org/pt/brazil/serie-a/fixtures')
-  .then(response => {
-    const html = response.data;
-    const $ = cheerio.load(html);
+  .then(({ data }) => {
+    const $ = cheerio.load(data);
+
     const elementos = $('.timezone-convert-match-week');
-    const jogos = []; // Array para armazenar informações de cada jogo
+    const jogos = [];
 
     elementos.each((index, element) => {
-        const jogo = {}; // Objeto para armazenar informações de um jogo
+        const jogo = {};
         jogo.data = $(element).text();
 
-        // Verificar se o próximo elemento `<span>` tem o atributo `status` com o valor `suspended`
         const proximoSpan = $(element).next('span');
         if (proximoSpan.attr('data-match-status') === 'suspended') {
             jogo.status = 'Suspended';
@@ -21,13 +26,16 @@ axios.get('https://footystats.org/pt/brazil/serie-a/fixtures')
             jogo.status = 'Not Suspended';
         }
       
-        // Extrair e adicionar informações do jogo ao objeto
         const [diaMes, hora] = jogo.data.split(' ');
         const [dia, mes] = diaMes.split('/');
         const diaInt = parseInt(dia, 10);
         const mesInt = parseInt(mes, 10);
         const novoDia = diaInt - 1;
-        const novaHora = (parseInt(hora.split(':')[0], 10) + 12) + ':' + hora.split(':')[1];
+        let novaHora = hora;
+
+        if (Number(hora.split(':')[0]) < 10) {
+          novaHora = (parseInt(hora.split(':')[0], 10) + 12) + ':' + hora.split(':')[1];
+        }
         const novaData = `${novoDia.toString().padStart(2, '0')}/${mesInt.toString().padStart(2, '0')} ${novaHora}`;
 
         jogo.data = novaData;
@@ -36,36 +44,26 @@ axios.get('https://footystats.org/pt/brazil/serie-a/fixtures')
         }
     });
 
-    // Ordenar os jogos por mês, dia e horário
     jogos.sort((a, b) => {
-        // Separar data e hora
         const [dataA, horaA] = a.data.split(' ');
         const [diaA, mesA] = dataA.split('/');
         const [dataB, horaB] = b.data.split(' ');
         const [diaB, mesB] = dataB.split('/');
         
-        // Comparar mês
         if (parseInt(mesA) !== parseInt(mesB)) {
             return parseInt(mesA) - parseInt(mesB);
         }
-        // Comparar dia
         if (parseInt(diaA) !== parseInt(diaB)) {
             return parseInt(diaA) - parseInt(diaB);
         }
-        // Comparar horário
-        const [horaAHour, horaAMin] = horaA.split(':');
-        const [horaBHour, horaBMin] = horaB.split(':');
-        if (parseInt(horaAHour) !== parseInt(horaBHour)) {
-            return parseInt(horaAHour) - parseInt(horaBHour);
-        }
-        return parseInt(horaAMin) - parseInt(horaBMin);
+        return horaA.localeCompare(horaB);
     });
 
-    // Converter o array JSON em uma string JSON
     const jsonJogos = JSON.stringify(jogos, null, 2);
+    const assetsDirectory = path.join(__dirname, '..', 'assets');
+    const filePath = path.join(assetsDirectory, 'jogos.json');
 
-    // Escrever o JSON em um arquivo
-    fs.writeFile('jogos.json', jsonJogos, 'utf8', (err) => {
+    fs.writeFile(filePath, jsonJogos, 'utf8', (err) => {
       if (err) {
         console.error('Erro ao escrever o arquivo:', err);
       } else {

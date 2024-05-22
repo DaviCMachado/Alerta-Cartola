@@ -1,0 +1,321 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
+
+
+// import 'package:device_info_plus/device_info_plus.dart';
+// import 'package:flutter/foundation.dart';
+// import 'package:timezone/data/latest_all.dart' as tz;
+// import 'package:timezone/timezone.dart' as tz;
+// import 'package:flutter_timezone/flutter_timezone.dart';
+// import 'notifications.dart';
+
+import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:workmanager/workmanager.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+
+  String estadoMercado = 'Fechado!';
+  String horaAlarme = '00:00';
+  String estadoAlarme = 'Desativado';
+  String estadoNotificacao = 'Desativado';
+  String mudarEstadoAlarme = 'Ativar Alarme!';
+  String mudarEstadoNotificacao = 'Ativar Notificação!';
+  String dataFechamento = 'Terça-Feira - 22/07';
+  String horaFechamento = '00:00';
+
+int id = 0;
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+
+final StreamController<String?> selectNotificationStream =
+    StreamController<String?>.broadcast();
+
+const MethodChannel platform =
+    MethodChannel('dexterx.dev/flutter_local_notifications_example');
+
+const String portName = 'notification_send_port';
+
+
+void _jogoMaisProximo() async {
+    try {
+      // Ler o conteúdo do arquivo JSON
+      final file = File('jogos.json');
+      String jsonString = await file.readAsString();
+
+      // Decodificar o JSON
+      final jogos = json.decode(jsonString);
+
+      // Verificar se há jogos
+      if (jogos.isNotEmpty) {
+        // Obter a data do primeiro jogo
+        final data = jogos[0]['data'];
+        dataFechamento = data.substring(0, 10);
+        horaFechamento = data.substring(11, 16);
+        
+      } else {
+        mudarEstadoAlarme = 'HAHA';
+      }
+    } catch (e) {
+      mudarEstadoAlarme = 'Erro ao obter informações!';
+    }
+  }
+Future<void> _executarScript() async {
+  try {
+    final processResult = await Process.run('node', ['teste.js']);
+    if (processResult.exitCode != 0) {
+      throw Exception('Erro ao executar o script');
+    }
+    
+    // Exibir notificação após a execução do script
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+            'your channel id', 'your channel name', 'your channel description',
+            importance: Importance.max, priority: Priority.high);
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+    await flutterLocalNotificationsPlugin.show(
+        0, 'Título da Notificação', 'Corpo da Notificação', platformChannelSpecifics,
+        payload: 'item x');
+    
+  } catch (e) {
+    throw Exception('Erro ao executar o script');
+  }
+}
+
+
+
+void callbackDispatcher() {
+  Workmanager workmanager = Workmanager();
+  workmanager.executeTask((task, inputData) async {
+    switch (task) {
+      case "periodicTask":
+        _executarScript();
+        _jogoMaisProximo();
+        break;
+      default:
+        break;
+    }
+    return Future.value(true);
+  });
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('app_icon');
+  final InitializationSettings initializationSettings =
+      InitializationSettings(android: initializationSettingsAndroid);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  runApp(const MyApp());
+}
+
+
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter Demo',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const MyHomePage(title: 'Desenvolvido por: Kiri'),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  final String title;
+
+  const MyHomePage({super.key, required this.title});
+
+  @override
+  _MyHomePageState createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+
+  
+  @override
+  void initState() {
+    super.initState();
+    _startPeriodicTask();
+  }
+
+  // Método para iniciar a tarefa periódica
+  void _startPeriodicTask() {
+    Workmanager().registerPeriodicTask(
+      "periodicTask",
+      "periodicTask",
+      initialDelay: const Duration(minutes: 10),
+    );
+  }
+
+  void _botaoAlarme() {
+    setState(() {
+      if (estadoAlarme == 'Desativado') {
+        estadoAlarme = 'Ativado';
+        mudarEstadoAlarme = 'Desativar Alarme!';
+      } else {
+        estadoAlarme = 'Desativado';
+        mudarEstadoAlarme = 'Ativar Alarme!';
+      }
+    });
+  }
+
+  
+
+  void _botaoNotificacao() {
+    setState(() {
+      if (estadoNotificacao == 'Desativado') {
+        estadoNotificacao = 'Ativado';
+        mudarEstadoNotificacao = 'Desativar Notificação!';
+      } else {
+        estadoNotificacao = 'Desativado';
+        mudarEstadoNotificacao = 'Ativar Notificação!';
+      }
+    });
+  }
+
+  Future<void> _botaoHorario() async {
+    final TimeOfDay? horarioSelecionado = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (horarioSelecionado != null) {
+      setState(() {
+        horaAlarme = horarioSelecionado.format(context);
+      });
+    }
+  }
+
+  void _abreManual() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Como Funciona:'),
+          content: const Text('O app te enviará notificações e alarmes para te lembrar de escalar o time no Cartola. Ao deixar a notificação/alarme ativada o app irá automaticamente te lembrar uma hora antes de fechar o mercado, você pode ajustar esse horário manualmente, mas a cada rodada o horário é resetado para uma hora antes do fechamento do mercado.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Ok, Entendi!'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Chamar Kiri no Zap'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.amber,
+        title: Text(widget.title),
+      ),
+
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            SizedBox(
+              width: 400,
+              height: 140,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Alarme: $estadoAlarme',
+                    style: const TextStyle(fontSize: 20),
+                    textWidthBasis: TextWidthBasis.parent,
+                  ),
+                  Text(
+                    'Notificação: $estadoNotificacao',
+                    style: const TextStyle(fontSize: 20),
+                    textWidthBasis: TextWidthBasis.parent,
+                  ),
+                  Text(
+                    'Horário de Alarme/Notificação: $horaAlarme',
+                    style: const TextStyle(fontSize: 18),
+                    textWidthBasis: TextWidthBasis.parent,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              width: 400,
+              height: 80,
+              child: Column(
+                children: [
+                  Text(
+                    'Dia de Fechamento: $dataFechamento',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Text(
+                    'Horário de Fechamento: $horaFechamento',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ),
+            const Text(
+              'Estado do Mercado: ',
+            ),
+            Text(
+              estadoMercado,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _botaoAlarme,
+              child: Text(mudarEstadoAlarme),
+            ),
+            ElevatedButton(
+              onPressed: _botaoNotificacao,
+              child: Text(mudarEstadoNotificacao),
+            ),
+            ElevatedButton(
+              onPressed: _botaoHorario,
+              child: const Text('Alterar Hora do Alarme/Notificação'),
+            ),
+            ElevatedButton(
+              onPressed: _abreManual,
+              child: const Row (
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Manual'),
+                  SizedBox(width: 10),
+                  Icon(Icons.help),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

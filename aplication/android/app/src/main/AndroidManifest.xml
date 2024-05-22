@@ -5,12 +5,20 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:label="Alerta de Mercado"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        <activity
+        android:icon="@drawable/ic_launcher"
+    >
+            <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
@@ -39,7 +47,7 @@
     
 
      
-        <!-- <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+        <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
@@ -52,7 +60,7 @@
         <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationDismissReceiver" />
 
         <service android:name="com.dexterous.flutterlocalnotifications.services.ForegroundService" android:enabled="true" android:exported="false"/>
-        <service android:name="com.dexterous.flutterlocalnotifications.services.NotificationActionService" android:exported="false"/> -->
+        <service android:name="com.dexterous.flutterlocalnotifications.services.NotificationActionService" android:exported="false"/> 
 
 
         <!-- Don't delete the meta-data below.

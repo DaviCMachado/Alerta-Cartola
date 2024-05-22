@@ -1,121 +1,152 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
-
-
-// import 'package:device_info_plus/device_info_plus.dart';
-// import 'package:flutter/foundation.dart';
-// import 'package:timezone/data/latest_all.dart' as tz;
-// import 'package:timezone/timezone.dart' as tz;
-// import 'package:flutter_timezone/flutter_timezone.dart';
-// import 'notifications.dart';
-
-import 'package:flutter/services.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:workmanager/workmanager.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:workmanager/workmanager.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_js/flutter_js.dart';
+import 'dart:typed_data';
 
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  String estadoMercado = 'Fechado!';
-  String horaAlarme = '00:00';
-  String estadoAlarme = 'Desativado';
-  String estadoNotificacao = 'Desativado';
-  String mudarEstadoAlarme = 'Ativar Alarme!';
-  String mudarEstadoNotificacao = 'Ativar Notificação!';
-  String dataFechamento = 'Terça-Feira - 22/07';
-  String horaFechamento = '00:00';
-
-int id = 0;
-
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-
-final StreamController<String?> selectNotificationStream =
-    StreamController<String?>.broadcast();
-
-const MethodChannel platform =
-    MethodChannel('dexterx.dev/flutter_local_notifications_example');
-
-const String portName = 'notification_send_port';
-
+final StreamController<String?> selectNotificationStream = StreamController<String?>.broadcast();
+JavascriptRuntime flutterJs = getJavascriptRuntime();
 
 void _jogoMaisProximo() async {
-    try {
-      // Ler o conteúdo do arquivo JSON
-      final file = File('jogos.json');
-      String jsonString = await file.readAsString();
-
-      // Decodificar o JSON
-      final jogos = json.decode(jsonString);
-
-      // Verificar se há jogos
-      if (jogos.isNotEmpty) {
-        // Obter a data do primeiro jogo
-        final data = jogos[0]['data'];
-        dataFechamento = data.substring(0, 10);
-        horaFechamento = data.substring(11, 16);
-        
-      } else {
-        mudarEstadoAlarme = 'HAHA';
-      }
-    } catch (e) {
-      mudarEstadoAlarme = 'Erro ao obter informações!';
-    }
-  }
-Future<void> _executarScript() async {
   try {
-    final processResult = await Process.run('node', ['teste.js']);
-    
-    // Exibir notificação após a execução do script
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-            'your channel id', 'your channel name', 'your channel description',
-            importance: Importance.max, priority: Priority.high);
-    const NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
-    await flutterLocalNotificationsPlugin.show(
-        0, 'Título da Notificação', 'Corpo da Notificação', platformChannelSpecifics,
-        payload: 'item x');
-    
+    final jsonString = await rootBundle.loadString('assets/jogos.json');
+    final jogos = json.decode(jsonString);
+    if (jogos.isNotEmpty) {
+      final data = jogos[0]['data'];
+      dataFechamento = data.substring(0, 10);
+      horaFechamento = data.substring(11, 16);
+    } else {
+      mudarEstadoAlarme = 'HAHA';
+    }
   } catch (e) {
-    print('Erro ao executar o script: $e');
+    mudarEstadoAlarme = 'Erro ao obter informações!';
   }
 }
-
-
 
 void callbackDispatcher() {
   Workmanager workmanager = Workmanager();
   workmanager.executeTask((task, inputData) async {
     switch (task) {
-      case "periodicTask":
+      case "Lembrete":
         _executarScript();
         _jogoMaisProximo();
         break;
       default:
-        print("Tarefa desconhecida: $task");
+        break;
     }
     return Future.value(true);
   });
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('app_icon');
-  final InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-  runApp(const MyApp());
+Future<void> _executarScript() async {
+  try {
+    final processResult = await Process.run('node', ['teste.mjs']);
+    
+    // Logar a saída e o erro do processo
+    print('stdout: ${processResult.stdout}');
+    print('stderr: ${processResult.stderr}');
+    
+    if (processResult.exitCode != 0) {
+      throw Exception('Erro no teste.mjs: ${processResult.stderr}');
+    }
+
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'channel id',
+        'channel name',
+        importance: Importance.max,
+        priority: Priority.high,
+      ),
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      0, 
+      'Título da Notificação', 
+      'Corpo da Notificação', 
+      platformChannelSpecifics,
+      payload: 'item x'
+    );
+  } catch (e) {
+    print('Exception: $e');
+    throw Exception('Erro ao tentar executar o teste.mjs: $e');
+  }
 }
 
 
+  Future<void> _executarScriptJS() async {
+
+    // Carrega o conteúdo do arquivo JavaScript
+    // String scriptContentPart1 = await _carregarScript('assets/teste.mjs');
+    // String scriptContentPart2 = await _carregarScript('assets/teste.mjs');
+    // String scriptContent = scriptContentPart1 + scriptContentPart2;
+    String scriptContent = await _carregarScript();
+
+    print(scriptContent);
+    try {
+      // Avalia o código JavaScript
+      JsEvalResult jsResult = await flutterJs.evaluate(scriptContent);
+
+      // Verifica se a saída do script contém a mensagem de sucesso
+      if (jsResult.stringResult.contains('Arquivo salvo com sucesso como jogos.json')) {
+        print('Arquivo salvo com sucesso como jogos.json');
+      } else {
+        print('Erro: A operação falhou');
+        print(jsResult.stringResult);
+      }
+    } catch (e) {
+      print('Erro ao executar JS: $e');
+    }
+  }
+
+/*
+  Future<String> _carregarScript(String nomeArquivo) async {
+    // Carrega o arquivo JavaScript da pasta de ativos
+    ByteData data = await rootBundle.load(nomeArquivo);
+    Uint8List bytes = data.buffer.asUint8List();
+    return utf8.decode(bytes);
+  }
+*/
+
+
+
+
+
+
+Future<String> _carregarScript() async {
+  try {
+    // Carregar o arquivo teste.mjs da pasta de ativos
+    ByteData data = await rootBundle.load('assets/teste.txt');
+    List<int> bytes = data.buffer.asUint8List();
+    
+    // Converta os bytes em uma string usando UTF-8
+    print(String.fromCharCodes(bytes));
+    return String.fromCharCodes(bytes);
+  } catch (e) {
+    // Se ocorrer algum erro, trate-o adequadamente
+    print('Erro ao carregar o arquivo teste.mjs: $e');
+    return 'aha'; // Retorna null em caso de erro
+  }
+}
+
+
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@drawable/ic_launcher');
+  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -141,48 +172,90 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+String estadoMercado = 'Fechado!';
+String horaAlarme = '00:00';
+String estadoAlarme = 'Desativado';
+String estadoNotificacao = 'Desativado';
+String mudarEstadoAlarme = 'Ativar Alarme!';
+String mudarEstadoNotificacao = 'Ativar Notificação!';
+String dataFechamento = 'Terça-Feira - 22/07';
+String horaFechamento = '00:00';
 
-  
+class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    flutterJs = getJavascriptRuntime();
     _startPeriodicTask();
   }
 
-  // Método para iniciar a tarefa periódica
   void _startPeriodicTask() {
     Workmanager().registerPeriodicTask(
-      "periodicTask",
-      "periodicTask",
+      "Lembrete",
+      "Lembrete",
+      tag: "Lembrete do gremio",
+      frequency: const Duration(minutes: 15),
       initialDelay: const Duration(minutes: 10),
     );
   }
 
-  void _botaoAlarme() {
-    setState(() {
-      if (estadoAlarme == 'Desativado') {
-        estadoAlarme = 'Ativado';
-        mudarEstadoAlarme = 'Desativar Alarme!';
-      } else {
-        estadoAlarme = 'Desativado';
-        mudarEstadoAlarme = 'Ativar Alarme!';
+  Future<DateTime?> _obterDataFechamento() async {
+    try {
+      final jsonString = await rootBundle.loadString('assets/jogos.json');
+      final jogos = json.decode(jsonString);
+      if (jogos.isNotEmpty) {
+        final data = jogos[0]['data'];
+        return DateTime.parse(data);
       }
-    });
+    } catch (e) {
+      Exception('Erro ao obter informações!!!!!!!');
+    }
+    return null;
   }
 
-  
+  Future<void> registerUniqueTask(TimeOfDay horarioSelecionado) async {
+    final DateTime agora = DateTime.now();
+    final TimeOfDay agoraHorario = TimeOfDay.fromDateTime(agora);
+    final DateTime? dataFechamento = await _obterDataFechamento();
 
-  void _botaoNotificacao() {
-    setState(() {
-      if (estadoNotificacao == 'Desativado') {
-        estadoNotificacao = 'Ativado';
-        mudarEstadoNotificacao = 'Desativar Notificação!';
-      } else {
-        estadoNotificacao = 'Desativado';
-        mudarEstadoNotificacao = 'Ativar Notificação!';
+    if (dataFechamento != null) {
+      final DateTime horarioNotificacao = DateTime(
+        dataFechamento.year,
+        dataFechamento.month,
+        dataFechamento.day,
+        horarioSelecionado.hour,
+        horarioSelecionado.minute,
+      );
+
+      final DateTime agoraComHorarioSelecionado = DateTime(
+        agora.year,
+        agora.month,
+        agora.day,
+        horarioSelecionado.hour,
+        horarioSelecionado.minute,
+      );
+
+      if (horarioNotificacao.isAfter(agora) || agoraComHorarioSelecionado.isBefore(agora)) {
+        // Calcular o intervalo de tempo até o horário de notificação
+        final Duration tempoAteNotificacao = horarioNotificacao.difference(agora);
+
+        // Converter o horário selecionado em minutos
+        final int minutosAteNotificacao = tempoAteNotificacao.inMinutes;
+
+        // Agendar a notificação
+        await flutterLocalNotificationsPlugin.zonedSchedule(
+          0,
+          'Título da Notificação',
+          'Corpo da Notificação',
+          tz.TZDateTime.from(horarioNotificacao, tz.local),
+          const NotificationDetails(android: AndroidNotificationDetails('channel id', 'channel name')),
+          androidAllowWhileIdle: true,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.time,
+          payload: 'item x',
+        );
       }
-    });
+    }
   }
 
   Future<void> _botaoHorario() async {
@@ -198,13 +271,31 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void _abrirWhatsApp() async {
+    // 'https://wa.me/5555996836060?text=Tenho%20interesse%20em%20comprar%20seu%20carro';
+    var url = Uri(
+      scheme: 'https',
+      host: 'wa.me',
+      path: '5555996836060',
+      queryParameters: {
+        'text': 'Olá, Kiri! Gostaria de saber mais sobre o app de lembrete de escalação do Cartola FC!',
+      },
+    );
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      throw 'Não foi possível abrir o WhatsApp!';
+    }
+  }
+
   void _abreManual() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Como Funciona:'),
-          content: const Text('O app te enviará notificações e alarmes para te lembrar de escalar o time no Cartola. Ao deixar a notificação/alarme ativada o app irá automaticamente te lembrar uma hora antes de fechar o mercado, você pode ajustar esse horário manualmente, mas a cada rodada o horário é resetado para uma hora antes do fechamento do mercado.'),
+          content: const Text(
+              'O app te enviará notificações e alarmes para te lembrar de escalar o time no Cartola. Ao deixar a notificação/alarme ativada o app irá automaticamente te lembrar uma hora antes de fechar o mercado, você pode ajustar esse horário manualmente, mas a cada rodada o horário é resetado para uma hora antes do fechamento do mercado.'),
           actions: <Widget>[
             TextButton(
               onPressed: () {
@@ -214,7 +305,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
+                _abrirWhatsApp();
               },
               child: const Text('Chamar Kiri no Zap'),
             ),
@@ -224,6 +315,30 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  void _botaoAlarme() {
+    setState(() {
+      if (estadoAlarme == 'Desativado') {
+        estadoAlarme = 'Ativado';
+        mudarEstadoAlarme = 'Desativar Alarme!';
+      } else {
+        estadoAlarme = 'Desativado';
+        mudarEstadoAlarme = 'Ativar Alarme!';
+      }
+    });
+  }
+
+  void _botaoNotificacao() {
+    setState(() {
+      if (estadoNotificacao == 'Desativado') {
+        estadoNotificacao = 'Ativado';
+        mudarEstadoNotificacao = 'Desativar Notificação!';
+      } else {
+        estadoNotificacao = 'Desativado';
+        mudarEstadoNotificacao = 'Ativar Notificação!';
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -231,7 +346,6 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Colors.amber,
         title: Text(widget.title),
       ),
-
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -284,7 +398,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             Text(
               estadoMercado,
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -301,7 +415,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ElevatedButton(
               onPressed: _abreManual,
-              child: const Row (
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Manual'),
@@ -309,6 +423,10 @@ class _MyHomePageState extends State<MyHomePage> {
                   Icon(Icons.help),
                 ],
               ),
+            ),
+            ElevatedButton(
+              onPressed: _executarScriptJS,
+              child: const Text('Executar JS'),
             ),
           ],
         ),
