@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_js/flutter_js.dart';
 import 'dart:typed_data';
@@ -93,7 +92,7 @@ Future<void> _executarScript() async {
     print(scriptContent);
     try {
       // Avalia o código JavaScript
-      JsEvalResult jsResult = await flutterJs.evaluate(scriptContent);
+      JsEvalResult jsResult = flutterJs.evaluate(scriptContent);
 
       // Verifica se a saída do script contém a mensagem de sucesso
       if (jsResult.stringResult.contains('Arquivo salvo com sucesso como jogos.json')) {
@@ -424,9 +423,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               ),
             ),
-            ElevatedButton(
+            const ElevatedButton(
               onPressed: _executarScriptJS,
-              child: const Text('Executar JS'),
+              child: Text('Executar JS'),
             ),
           ],
         ),
